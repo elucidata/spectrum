@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spectrum"
+  short_description: "Agentic issues, tickets, specs, and ADRs"
+  default_prompt: "Use $spectrum to explore this change and prepare it for AFK implementation."

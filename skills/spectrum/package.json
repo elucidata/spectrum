@@ -1,0 +1,16 @@
+{
+  "name": "@elucidata/spectrum-skill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A routed Codex skill for agentic issues, tickets, specs, and ADRs.",
+  "type": "module",
+  "bin": {
+    "spectrum": "./scripts/spectrum.mjs"
+  },
+  "scripts": {
+    "test": "node --test scripts/spectrum.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
