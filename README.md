@@ -15,6 +15,8 @@ Use Spectrum when you want an AI coding agent to do real work without hovering o
 
 The flow is: capture an issue → explore it → propose a ticket → implement it autonomously → hand back for human QA → close.
 
+See [`GLOSSARY.md`](GLOSSARY.md) for the full ubiquitous language.
+
 ## Install
 
 Spectrum is packaged as a skill and installs with the [`skills`](https://www.npmjs.com/package/skills) CLI:

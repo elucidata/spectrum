@@ -1,6 +1,6 @@
-# Spectrum
+# Glossary
 
-Spectrum organizes agentic software work so that a human agrees on intent before autonomous implementation and returns for final QA.
+The ubiquitous language for Spectrum, which organizes agentic software work so that a human agrees on intent before autonomous implementation and returns for final QA.
 
 ## Language
 
