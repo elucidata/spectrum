@@ -1,0 +1,16 @@
+{
+  "name": "@elucidata/spectrum",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A lean agentic-development workflow around Markdown issues, tickets, specs, and ADRs, packaged as an installable skill.",
+  "type": "module",
+  "bin": {
+    "spectrum": "skills/spectrum/scripts/spectrum.mjs"
+  },
+  "scripts": {
+    "test": "node --test skills/spectrum/scripts/spectrum.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
