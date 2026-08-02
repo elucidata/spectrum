@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -167,4 +167,60 @@ test("keeps blockers separate from state and rejects draft-only issue completion
   ]);
   const failure = run(project, ["transition", issueId, "ticketed"], 1);
   assert.match(failure, /ticket that has reached ready/u);
+});
+
+const AGENTS_START = "<!-- spectrum:start -->";
+const AGENTS_END = "<!-- spectrum:end -->";
+
+function countOccurrences(haystack, needle) {
+  return haystack.split(needle).length - 1;
+}
+
+test("init creates AGENTS.md with a single Spectrum block", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const agentsPath = join(project, "AGENTS.md");
+  assert.ok(existsSync(agentsPath), "AGENTS.md should be created");
+  const contents = readFileSync(agentsPath, "utf8");
+  assert.equal(countOccurrences(contents, AGENTS_START), 1);
+  assert.equal(countOccurrences(contents, AGENTS_END), 1);
+  assert.match(contents, /## Spectrum workflow/u);
+});
+
+test("init appends to an existing AGENTS.md without disturbing prior content", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  const agentsPath = join(project, "AGENTS.md");
+  writeFileSync(agentsPath, "# House rules\n\nBe excellent.\n");
+  run(project, ["init"]);
+  const contents = readFileSync(agentsPath, "utf8");
+  assert.match(contents, /# House rules/u);
+  assert.match(contents, /Be excellent\./u);
+  assert.equal(countOccurrences(contents, AGENTS_START), 1);
+  assert.ok(
+    contents.indexOf("Be excellent.") < contents.indexOf(AGENTS_START),
+    "prior content should precede the appended block",
+  );
+});
+
+test("re-running the bootstrap replaces the block instead of duplicating it", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  const agentsPath = join(project, "AGENTS.md");
+  writeFileSync(
+    agentsPath,
+    `# Top\n\n${AGENTS_START}\nstale spectrum guidance\n${AGENTS_END}\n\n# Bottom\n`,
+  );
+  run(project, ["init"]);
+  const contents = readFileSync(agentsPath, "utf8");
+  assert.equal(countOccurrences(contents, AGENTS_START), 1);
+  assert.equal(countOccurrences(contents, AGENTS_END), 1);
+  assert.doesNotMatch(contents, /stale spectrum guidance/u);
+  assert.match(contents, /# Top/u);
+  assert.match(contents, /# Bottom/u);
+  assert.match(contents, /## Spectrum workflow/u);
+});
+
+test("init --no-agents does not create AGENTS.md", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init", "--no-agents"]);
+  assert.ok(!existsSync(join(project, "AGENTS.md")), "AGENTS.md should not be created");
 });

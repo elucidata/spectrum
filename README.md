@@ -29,6 +29,22 @@ npx skills add elucidata/spectrum@spectrum -g -y
 
 Once installed, your agent picks up the skill automatically — just describe what you want ("capture an issue about…", "turn this into a ticket", "implement ticket 9f3kq2").
 
+## Setup
+
+After installing the skill, run `init` **inside the repo** you want to manage:
+
+```sh
+node skills/spectrum/scripts/spectrum.mjs init   # or: spectrum init
+```
+
+`init` scaffolds the `spectrum/` and `docs/` directories, writes `spectrum/config.json`, and adds a short **Spectrum block to `AGENTS.md`** (creating the file if it doesn't exist). That block is what makes agents which read `AGENTS.md` — Codex, OpenCode, Pi — aware the project uses Spectrum; Claude Code already picks it up through the skill directly. The block is wrapped in `<!-- spectrum:start -->` / `<!-- spectrum:end -->` markers, so re-running `init` updates it in place rather than duplicating, and any surrounding content is left untouched.
+
+This only takes effect when you **run your agent inside that repo** — that's how the `AGENTS.md` guidance gets loaded into context. To skip the `AGENTS.md` write entirely:
+
+```sh
+spectrum init --no-agents
+```
+
 ## How to use
 
 Spectrum routes a request to one of six workflows:

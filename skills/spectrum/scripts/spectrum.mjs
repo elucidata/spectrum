@@ -56,7 +56,7 @@ function parseCommandLine(args) {
       continue;
     }
     const name = value.slice(2);
-    if (name === "archived") {
+    if (name === "archived" || name === "no-agents") {
       flags[name] = true;
       continue;
     }
@@ -123,7 +123,50 @@ function projectPath(project, name) {
   return target;
 }
 
-function initialize(pathArg) {
+const AGENTS_START = "<!-- spectrum:start -->";
+const AGENTS_END = "<!-- spectrum:end -->";
+
+function agentsBlock() {
+  return `${AGENTS_START}
+## Spectrum workflow
+
+This project uses **Spectrum** to manage development work as Markdown artifacts.
+Issues and tickets live in \`spectrum/\`; specs in \`docs/specs\`; ADRs in \`docs/adrs\`.
+
+When asked to capture an idea or bug, triage, turn an issue into an
+implementation-ready ticket, implement a ticket, run QA, or validate artifacts,
+follow the Spectrum workflow. If a \`spectrum\` skill is available, use it. Drive
+all mechanics — IDs, transitions, file moves, validation — through the Spectrum
+CLI rather than hand-editing files, and run \`doctor\` before finishing.
+${AGENTS_END}`;
+}
+
+function writeAgentsBootstrap(root) {
+  const agentsPath = join(root, "AGENTS.md");
+  const block = agentsBlock();
+  if (!existsSync(agentsPath)) {
+    writeFileSync(agentsPath, `${block}\n`);
+    console.log("Added Spectrum guidance to AGENTS.md.");
+    return;
+  }
+  const existing = readFileSync(agentsPath, "utf8");
+  const start = existing.indexOf(AGENTS_START);
+  if (start !== -1) {
+    const end = existing.indexOf(AGENTS_END, start);
+    if (end !== -1) {
+      const updated =
+        existing.slice(0, start) + block + existing.slice(end + AGENTS_END.length);
+      writeFileSync(agentsPath, updated);
+      console.log("Updated Spectrum guidance in AGENTS.md.");
+      return;
+    }
+  }
+  const separator = existing.endsWith("\n") ? "\n" : "\n\n";
+  writeFileSync(agentsPath, `${existing}${separator}${block}\n`);
+  console.log("Added Spectrum guidance to AGENTS.md.");
+}
+
+function initialize(pathArg, flags = {}) {
   const root = resolve(pathArg || process.cwd());
   const configPath = join(root, "spectrum", "config.json");
   if (existsSync(configPath)) {
@@ -134,6 +177,9 @@ function initialize(pathArg) {
   }
   writeFileSync(configPath, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`);
   console.log(`Initialized Spectrum at ${root}.`);
+  if (!flags["no-agents"]) {
+    writeAgentsBootstrap(root);
+  }
 }
 
 function now() {
@@ -742,7 +788,7 @@ function help() {
   console.log(`Spectrum
 
 Usage:
-  spectrum init [path]
+  spectrum init [path] [--no-agents]
   spectrum new issue --title <title>
   spectrum new ticket --title <title> [--issue <issue-id>]
   spectrum list [issues|tickets|all] [--status <status>] [--archived]
@@ -760,7 +806,7 @@ function main() {
   const [command = "help", noun, value] = positionals;
   switch (command) {
     case "init":
-      initialize(noun);
+      initialize(noun, flags);
       break;
     case "new":
       if (!["issue", "ticket"].includes(noun)) fail("New accepts issue or ticket.");
