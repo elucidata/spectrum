@@ -1,5 +1,5 @@
 {
-  "name": "@elucidata/spectrum",
+  "name": "spectrum",
   "version": "0.1.0",
   "private": true,
   "description": "A lean agentic-development workflow around Markdown issues, tickets, specs, and ADRs, packaged as an installable skill.",
