@@ -19,6 +19,8 @@ spectrum/
 
 Keep archives in the working tree. Use CLI filtering to avoid loading them into context.
 
+Artifact files are named `<id>-<slug>.<kind>.md`. IDs are 6-character lowercase Crockford base32 (`0-9` and `a-z` excluding `i`, `l`, `o`, `u`); the type is carried by the `.issue.md` / `.ticket.md` suffix, not the ID.
+
 ## States
 
 Issues:

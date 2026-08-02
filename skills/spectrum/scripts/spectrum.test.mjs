@@ -33,7 +33,7 @@ test("runs an issue and ticket through the complete lifecycle", () => {
   run(project, ["init"]);
 
   const issueOutput = run(project, ["new", "issue", "--title", "Remember login errors"]);
-  const issueId = issueOutput.match(/i-[a-f0-9]{8}/u)[0];
+  const issueId = issueOutput.match(/Created issue ([0-9a-hjkmnp-tv-z]{6})/u)[1];
   const issuePath = onlyMarkdown(join(project, "spectrum", "issues"));
   let issue = readFileSync(issuePath, "utf8")
     .replace(
@@ -55,7 +55,7 @@ test("runs an issue and ticket through the complete lifecycle", () => {
     "--issue",
     issueId,
   ]);
-  const ticketId = ticketOutput.match(/t-[a-f0-9]{8}/u)[0];
+  const ticketId = ticketOutput.match(/Created ticket ([0-9a-hjkmnp-tv-z]{6})/u)[1];
   const ticketPath = onlyMarkdown(join(project, "spectrum", "tickets"));
   let ticket = readFileSync(ticketPath, "utf8")
     .replace(
@@ -127,7 +127,7 @@ test("rejects a placeholder ticket as ready with plain-language guidance", () =>
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init"]);
   const output = run(project, ["new", "ticket", "--title", "Incomplete change"]);
-  const ticketId = output.match(/t-[a-f0-9]{8}/u)[0];
+  const ticketId = output.match(/Created ticket ([0-9a-hjkmnp-tv-z]{6})/u)[1];
   const failure = run(project, ["transition", ticketId, "ready"], 1);
   assert.match(failure, /cannot move to ready/u);
   assert.match(failure, /fill the Outcome section/u);
@@ -137,7 +137,7 @@ test("keeps blockers separate from state and rejects draft-only issue completion
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init"]);
   const issueOutput = run(project, ["new", "issue", "--title", "Investigate cache misses"]);
-  const issueId = issueOutput.match(/i-[a-f0-9]{8}/u)[0];
+  const issueId = issueOutput.match(/Created issue ([0-9a-hjkmnp-tv-z]{6})/u)[1];
   const issuePath = onlyMarkdown(join(project, "spectrum", "issues"));
   const issue = readFileSync(issuePath, "utf8")
     .replace(

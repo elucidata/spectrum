@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -140,9 +140,14 @@ function now() {
   return new Date().toISOString();
 }
 
-function makeId(kind) {
-  const prefix = kind === "issue" ? "i" : "t";
-  return `${prefix}-${randomBytes(4).toString("hex")}`;
+const CROCKFORD_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+
+function makeId() {
+  let id = "";
+  for (let i = 0; i < 6; i += 1) {
+    id += CROCKFORD_ALPHABET[randomInt(CROCKFORD_ALPHABET.length)];
+  }
+  return id;
 }
 
 function slugify(value) {
@@ -285,7 +290,7 @@ function createArtifact(kind, title, sourceIssue) {
     if (linkedIssue.data.kind !== "issue") fail(`${sourceIssue} is not an issue.`);
     if (linkedIssue.archived) fail(`${sourceIssue} is archived and cannot be linked.`);
   }
-  const id = makeId(kind);
+  const id = makeId();
   const timestamp = now();
   const data =
     kind === "issue"
@@ -575,8 +580,8 @@ function validateArtifactShape(artifact, project, byId) {
   const addError = (message) => errors.push(`${label}: ${message}`);
   if (data.spectrum !== 1) addError("set spectrum frontmatter to 1.");
   if (!["issue", "ticket"].includes(data.kind)) addError("kind must be issue or ticket.");
-  if (typeof data.id !== "string" || !/^[it]-[a-f0-9]{8}$/u.test(data.id)) {
-    addError("id must look like i-1234abcd or t-1234abcd.");
+  if (typeof data.id !== "string" || !/^[0-9a-hjkmnp-tv-z]{6}$/u.test(data.id)) {
+    addError("id must be 6 Crockford base32 chars, e.g. 9f3kq2.");
   }
   if (typeof data.title !== "string" || !data.title.trim()) addError("title must not be empty.");
   const states = data.kind === "issue" ? ISSUE_STATES : TICKET_STATES;
