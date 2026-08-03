@@ -54,7 +54,10 @@ const DEFAULT_CONFIG = {
         checklistsComplete: ["Acceptance criteria", "Implementation plan"],
         sections: ["Execution log"],
       },
-      done: { qaApproved: true },
+      done: {
+        checklistsComplete: ["Human QA"],
+        qaApproved: true,
+      },
     },
   },
 };
