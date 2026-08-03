@@ -99,7 +99,7 @@ IDs are 6-character lowercase [Crockford base32](https://www.crockford.com/base3
 
 ## Customizing
 
-Two things are configurable per project: the **templates** used for new artifacts, and the **contract** `doctor` checks readiness against.
+Two things are configurable per project: the **templates** used for new artifacts, and the **contract** that `doctor` and `transition` check readiness against.
 
 ### Templates
 
@@ -155,7 +155,7 @@ From then on, new tickets carry the heading from the template, and `transition <
 
 ### Changing the contract on a live project
 
-Editing `contract` in `config.json` doesn't retroactively re-validate artifacts that already passed a gate — existing work is grandfathered. The new contract only applies the next time an artifact transitions through that gate. To force an in-flight artifact onto the new contract immediately, transition it back a step and forward again (e.g. `active` → `ready` → `active`) so the gate check runs under the current contract.
+Editing `contract` in `config.json` affects `doctor` and `transition` differently. `doctor`'s warning tier reflects the *current* contract immediately: any in-flight (non-terminal, non-archived) artifact missing a newly-required section shows up as a warning on the very next `doctor` run, with no transition needed — and, as always, warnings never block or fail the run. `transition`'s *blocking* check, by contrast, only validates the gate an artifact is actually crossing, so work that already passed a gate keeps moving, and terminal (`ticketed`/`done`) and archived artifacts are fully exempt from both. To force an in-flight artifact through the new contract's blocking check, transition it back a step and forward again (e.g. `active` → `ready` → `active`) — the backward step re-enters the earlier gate under the current contract.
 
 ### Upgrading an older project
 
