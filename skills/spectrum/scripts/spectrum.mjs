@@ -126,7 +126,7 @@ function loadProject(start) {
   validateConfig(config);
   const legacyConfig = config.schemaVersion === 1 || !config.contract;
   if (legacyConfig) {
-    config.contract = DEFAULT_CONFIG.contract;
+    config.contract = structuredClone(DEFAULT_CONFIG.contract);
   }
   return { root, config, legacyConfig };
 }
@@ -680,19 +680,21 @@ function validateArtifactShape(artifact, project, byId) {
   return { errors, warnings };
 }
 
-function hasHeading(templateText, heading) {
+function hasHeading(templateText, heading, level) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`^#{1,6} ${escaped}[\\t ]*$`, "imu").test(templateText);
+  const hashes = "#".repeat(level);
+  return new RegExp(`^${hashes} ${escaped}[\\t ]*$`, "imu").test(templateText);
 }
 
 function templateContractProblems(project) {
   const problems = [];
   for (const kind of ["issue", "ticket"]) {
     const gates = project.config.contract?.[kind] || {};
-    const required = new Set();
+    // heading -> required heading level (2 for sections, 3 for subsections)
+    const required = new Map();
     for (const gate of Object.values(gates)) {
-      for (const heading of gate.sections || []) required.add(heading);
-      for (const heading of gate.subsections || []) required.add(heading);
+      for (const heading of gate.sections || []) required.set(heading, 2);
+      for (const heading of gate.subsections || []) required.set(heading, 3);
     }
     let template;
     try {
@@ -701,9 +703,10 @@ function templateContractProblems(project) {
       problems.push(`${kind} template could not be read.`);
       continue;
     }
-    for (const heading of required) {
-      if (!hasHeading(template, heading)) {
-        problems.push(`${kind}.md is missing the "## ${heading}" heading required by the contract.`);
+    for (const [heading, level] of required) {
+      if (!hasHeading(template, heading, level)) {
+        const hashes = "#".repeat(level);
+        problems.push(`${kind}.md is missing the "${hashes} ${heading}" heading required by the contract.`);
       }
     }
   }
@@ -724,7 +727,7 @@ function upgradeConfig(pathArg) {
     return;
   }
   config.schemaVersion = 2;
-  if (!config.contract) config.contract = DEFAULT_CONFIG.contract;
+  if (!config.contract) config.contract = structuredClone(DEFAULT_CONFIG.contract);
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   console.log(`Upgraded ${relative(root, configPath)} to schemaVersion 2.`);
 }

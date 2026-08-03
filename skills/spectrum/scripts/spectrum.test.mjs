@@ -456,6 +456,31 @@ test("doctor errors when a template override omits a contract-required heading",
   assert.match(failure, /required by the contract/u);
 });
 
+test("doctor flags a required subsection placed at the wrong heading level", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const templates = join(project, "spectrum", "templates");
+  mkdirSync(templates, { recursive: true });
+  // Every required level-2 section is present, but the contract requires
+  // "In scope" as a level-3 subsection (###); here it is wrongly at level 2.
+  writeFileSync(
+    join(templates, "ticket.md"),
+    [
+      "## Outcome",
+      "## Context",
+      "## Validation",
+      "## Spec updates",
+      "## ADR candidates",
+      "## Execution log",
+      "## In scope",
+      "### Out of scope",
+    ].join("\n\n") + "\n",
+  );
+  const failure = run(project, ["doctor"], 1);
+  assert.match(failure, /### In scope/u);
+  assert.match(failure, /required by the contract/u);
+});
+
 function writeV1Config(project, overrides = {}) {
   const config = {
     schemaVersion: 1,
