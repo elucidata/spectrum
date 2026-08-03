@@ -442,6 +442,54 @@ test("doctor warns (does not error) on in-flight artifacts missing a required se
   assert.match(doctor, /warning\(s\)/u);
 });
 
+test("doctor warns (does not error) on a qa-status ticket missing a required section", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const output = run(project, ["new", "ticket", "--title", "QA-stage ticket"]);
+  const ticketId = output.match(/Created ticket ([0-9a-hjkmnp-tv-z]{6})/u)[1];
+  const ticketPath = onlyMarkdown(join(project, "spectrum", "tickets"));
+
+  // Fill the ticket enough to satisfy the ready gate, then drive it to qa.
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8")
+      .replace("<!-- Describe the observable post-change result. -->", "QA outcome.")
+      .replace("<!-- List included behavior and surfaces. -->", "- A")
+      .replace("<!-- List nearby work this ticket does not authorize. -->", "- B")
+      .replace("<!-- Include only facts the implementation agent cannot cheaply rediscover. -->", "Context.")
+      .replace("- [ ] Replace this placeholder with an observable criterion.", "- [ ] Observable criterion.")
+      .replace("- [ ] Replace this placeholder with a concrete work item.", "- [ ] Concrete work item.")
+      .replace("<!-- Name verified project commands and focused checks. -->", "`npm test`.")
+      .replace("<!-- Name each spec and the complete post-change truth it must contain, or explain why none changes. -->", "None.")
+      .replace("<!-- Record only durable and surprising trade-offs, or state that none are expected. -->", "None expected.")
+      .replace("- [ ] Replace this placeholder with a human-observable scenario.", "- [ ] Human scenario."),
+  );
+  run(project, ["transition", ticketId, "ready"]);
+  run(project, ["transition", ticketId, "active"]);
+
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8")
+      .replace("- [ ] Observable criterion.", "- [x] Observable criterion.")
+      .replace("- [ ] Concrete work item.", "- [x] Concrete work item.")
+      .replace("## Execution log\n", "## Execution log\n\nValidation passed.\n"),
+  );
+  run(project, ["transition", ticketId, "qa"]);
+
+  // A qa-status ticket is in-flight (terminal is done), so its cumulative
+  // ["ready", "qa"] gates are still checked — as warnings, not errors. Blank a
+  // required ready-gate section; doctor should warn and stay healthy (exit 0).
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8").replace("QA outcome.", ""),
+  );
+
+  const doctor = run(project, ["doctor"]); // still exit 0
+  assert.match(doctor, /Spectrum is healthy/u);
+  assert.match(doctor, /fill the Outcome section/u);
+  assert.match(doctor, /warning\(s\)/u);
+});
+
 test("doctor errors when a template override omits a contract-required heading", () => {
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init"]);
