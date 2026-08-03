@@ -713,7 +713,12 @@ function templateContractProblems(project) {
 function upgradeConfig(pathArg) {
   const root = findProjectRoot(resolve(pathArg || process.cwd()));
   const configPath = join(root, "spectrum", "config.json");
-  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configPath, "utf8"));
+  } catch (error) {
+    fail(`Could not read ${relative(root, configPath)}: ${error.message}`);
+  }
   if (config.schemaVersion === 2 && config.contract) {
     console.log("Spectrum config is already current (schemaVersion 2).");
     return;

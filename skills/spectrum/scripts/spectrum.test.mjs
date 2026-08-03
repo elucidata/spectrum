@@ -507,3 +507,12 @@ test("init on an existing project points at upgrade", () => {
   const failure = run(project, ["init"], 1);
   assert.match(failure, /spectrum upgrade/u);
 });
+
+test("upgrade reports malformed config with the standard CLI error", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init", "--no-agents"]);
+  writeFileSync(join(project, "spectrum", "config.json"), "{ not valid json,, }");
+
+  const failure = run(project, ["upgrade"], 1);
+  assert.match(failure, /Spectrum could not continue/u);
+});
