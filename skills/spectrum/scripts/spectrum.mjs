@@ -651,28 +651,25 @@ function validateArtifactShape(artifact, project, byId) {
     warnings.push(`${label}: ${data.blocked_by.length} blocker(s) remain.`);
   }
 
-  const requiredGates =
-    data.kind === "issue"
-      ? {
-          open: [],
-          ready: ["ready"],
-          ticketed: ["ready", "ticketed"],
-        }[data.status] || []
-      : {
-          draft: [],
-          ready: ["ready"],
-          active: ["ready"],
-          qa: ["ready", "qa"],
-          done: ["ready", "qa", "done"],
-        }[data.status] || [];
-  const gateProblems = new Set(
-    requiredGates.flatMap((gate) =>
-      readinessProblems(artifact, gate, project.config.contract, { ignoreBlockers: true }),
-    ),
-  );
-  for (const problem of gateProblems) {
-    addError(`status ${data.status} is invalid until you ${problem}.`);
+  const terminal =
+    (data.kind === "issue" && data.status === "ticketed") ||
+    (data.kind === "ticket" && data.status === "done");
+
+  if (!artifact.archived && !terminal) {
+    const requiredGates =
+      data.kind === "issue"
+        ? { open: [], ready: ["ready"] }[data.status] || []
+        : { draft: [], ready: ["ready"], active: ["ready"], qa: ["ready", "qa"] }[data.status] || [];
+    const gateProblems = new Set(
+      requiredGates.flatMap((gate) =>
+        readinessProblems(artifact, gate, project.config.contract, { ignoreBlockers: true }),
+      ),
+    );
+    for (const problem of gateProblems) {
+      warnings.push(`${label}: status ${data.status} is stale until you ${problem}.`);
+    }
   }
+
   return { errors, warnings };
 }
 

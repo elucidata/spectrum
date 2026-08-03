@@ -353,3 +353,87 @@ test("config carries the contract and a custom required section is enforced", ()
   const failure = run(project, ["transition", ticketId, "ready"], 1);
   assert.match(failure, /fill the Rollback section/u);
 });
+
+function readConfig(project) {
+  return JSON.parse(readFileSync(join(project, "spectrum", "config.json"), "utf8"));
+}
+function writeConfig(project, config) {
+  writeFileSync(join(project, "spectrum", "config.json"), `${JSON.stringify(config, null, 2)}\n`);
+}
+
+test("doctor exempts a terminal, archived artifact from tightened contract checks", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const output = run(project, ["new", "ticket", "--title", "Terminal ticket"]);
+  const ticketId = output.match(/Created ticket ([0-9a-hjkmnp-tv-z]{6})/u)[1];
+  const ticketPath = onlyMarkdown(join(project, "spectrum", "tickets"));
+
+  // Fill the ticket enough to satisfy the DEFAULT ready gate.
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8")
+      .replace("<!-- Describe the observable post-change result. -->", "Terminal outcome.")
+      .replace("<!-- List included behavior and surfaces. -->", "- A")
+      .replace("<!-- List nearby work this ticket does not authorize. -->", "- B")
+      .replace("<!-- Include only facts the implementation agent cannot cheaply rediscover. -->", "Context.")
+      .replace("- [ ] Replace this placeholder with an observable criterion.", "- [ ] Observable criterion.")
+      .replace("- [ ] Replace this placeholder with a concrete work item.", "- [ ] Concrete work item.")
+      .replace("<!-- Name verified project commands and focused checks. -->", "`npm test`.")
+      .replace("<!-- Name each spec and the complete post-change truth it must contain, or explain why none changes. -->", "None.")
+      .replace("<!-- Record only durable and surprising trade-offs, or state that none are expected. -->", "None expected.")
+      .replace("- [ ] Replace this placeholder with a human-observable scenario.", "- [ ] Human scenario."),
+  );
+  run(project, ["transition", ticketId, "ready"]);
+  run(project, ["transition", ticketId, "active"]);
+
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8")
+      .replace("- [ ] Observable criterion.", "- [x] Observable criterion.")
+      .replace("- [ ] Concrete work item.", "- [x] Concrete work item.")
+      .replace("## Execution log\n", "## Execution log\n\nValidation passed.\n"),
+  );
+  run(project, ["transition", ticketId, "qa"]);
+
+  writeFileSync(
+    ticketPath,
+    readFileSync(ticketPath, "utf8")
+      .replace("- [ ] Human scenario.", "- [x] Human scenario.")
+      .replace("## QA notes", "## QA notes\n\nApproved."),
+  );
+  run(project, ["transition", ticketId, "done"]);
+  run(project, ["archive", ticketId]);
+
+  // Now tighten the ready gate to demand a section the archived ticket lacks.
+  const config = readConfig(project);
+  config.contract.ticket.ready.sections.push("Rollback");
+  writeConfig(project, config);
+
+  const doctor = run(project, ["doctor"]); // exempt: no error despite missing Rollback
+  assert.match(doctor, /Spectrum is healthy: checked 1 artifact\(s\)\./u);
+});
+
+test("doctor warns (does not error) on in-flight artifacts missing a required section", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const issueOutput = run(project, ["new", "issue", "--title", "Half-filled issue"]);
+  const issueId = issueOutput.match(/Created issue ([0-9a-hjkmnp-tv-z]{6})/u)[1];
+  const issuePath = onlyMarkdown(join(project, "spectrum", "issues"));
+  writeFileSync(
+    issuePath,
+    readFileSync(issuePath, "utf8")
+      .replace("<!-- What is happening, missing, or worth revisiting? -->", "Real problem.")
+      .replace("<!-- What would be observably better? -->", "Real outcome."),
+  );
+  run(project, ["transition", issueId, "ready"]);
+
+  // Now require a section the ready issue lacks.
+  const config = readConfig(project);
+  config.contract.issue.ready.sections.push("Risk");
+  writeConfig(project, config);
+
+  const doctor = run(project, ["doctor"]); // still exit 0
+  assert.match(doctor, /Spectrum is healthy/u);
+  assert.match(doctor, /fill the Risk section/u);
+  assert.match(doctor, /warning\(s\)/u);
+});
