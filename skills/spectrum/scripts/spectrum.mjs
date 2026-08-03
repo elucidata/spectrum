@@ -681,10 +681,6 @@ function hasHeading(templateText, heading) {
 function templateContractProblems(project) {
   const problems = [];
   for (const kind of ["issue", "ticket"]) {
-    // Only check templates that have been overridden in the project.
-    const override = join(project.root, "spectrum", "templates", `${kind}.md`);
-    if (!existsSync(override)) continue;
-
     const gates = project.config.contract?.[kind] || {};
     const required = new Set();
     for (const gate of Object.values(gates)) {

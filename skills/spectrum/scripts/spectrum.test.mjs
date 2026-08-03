@@ -354,13 +354,6 @@ test("config carries the contract and a custom required section is enforced", ()
   assert.match(failure, /fill the Rollback section/u);
 });
 
-function readConfig(project) {
-  return JSON.parse(readFileSync(join(project, "spectrum", "config.json"), "utf8"));
-}
-function writeConfig(project, config) {
-  writeFileSync(join(project, "spectrum", "config.json"), `${JSON.stringify(config, null, 2)}\n`);
-}
-
 test("doctor exempts a terminal, archived artifact from tightened contract checks", () => {
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init"]);
@@ -404,12 +397,18 @@ test("doctor exempts a terminal, archived artifact from tightened contract check
   run(project, ["transition", ticketId, "done"]);
   run(project, ["archive", ticketId]);
 
-  // Now tighten the ready gate to demand a section the archived ticket lacks.
-  const config = readConfig(project);
-  config.contract.ticket.ready.sections.push("Rollback");
-  writeConfig(project, config);
+  // Damage the archived artifact so it no longer satisfies the ready gate
+  // (blank a required section). Under the old cumulative rules doctor would
+  // hard-error on the archived done ticket; terminal/archived artifacts are
+  // now exempt from contract checks. The default template is unchanged, so
+  // the Tier-3 template-vs-contract check stays clean.
+  const archivedPath = onlyMarkdown(join(project, "spectrum", "archives", "tickets"));
+  writeFileSync(
+    archivedPath,
+    readFileSync(archivedPath, "utf8").replace("Terminal outcome.", ""),
+  );
 
-  const doctor = run(project, ["doctor"]); // exempt: no error despite missing Rollback
+  const doctor = run(project, ["doctor"]); // exempt: no error despite the blank Outcome
   assert.match(doctor, /Spectrum is healthy: checked 1 artifact\(s\)\./u);
 });
 
@@ -427,14 +426,19 @@ test("doctor warns (does not error) on in-flight artifacts missing a required se
   );
   run(project, ["transition", issueId, "ready"]);
 
-  // Now require a section the ready issue lacks.
-  const config = readConfig(project);
-  config.contract.issue.ready.sections.push("Risk");
-  writeConfig(project, config);
+  // After reaching ready, blank a required section so the in-flight issue no
+  // longer satisfies the contract. The default template still HAS the heading,
+  // so this exercises the Tier-2 in-flight warning, not the Tier-3 template
+  // check. Under the old rules this was a hard error; now it is a warning and
+  // doctor stays healthy (exit 0).
+  writeFileSync(
+    issuePath,
+    readFileSync(issuePath, "utf8").replace("Real outcome.", ""),
+  );
 
   const doctor = run(project, ["doctor"]); // still exit 0
   assert.match(doctor, /Spectrum is healthy/u);
-  assert.match(doctor, /fill the Risk section/u);
+  assert.match(doctor, /fill the Desired outcome section/u);
   assert.match(doctor, /warning\(s\)/u);
 });
 
