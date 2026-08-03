@@ -263,3 +263,22 @@ test("an agents template override changes the AGENTS.md block body", () => {
   assert.match(contents, /Custom guidance\./u);
   assert.equal(countOccurrences(contents, AGENTS_START), 1);
 });
+
+test("config carries the contract and a custom required section is enforced", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+
+  const configPath = join(project, "spectrum", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.schemaVersion, 2);
+  assert.deepEqual(config.contract.ticket.ready.sections.slice(0, 2), ["Outcome", "Context"]);
+
+  // Add a project-specific required section to the ready gate.
+  config.contract.ticket.ready.sections.push("Rollback");
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const output = run(project, ["new", "ticket", "--title", "Needs rollback"]);
+  const ticketId = output.match(/Created ticket ([0-9a-hjkmnp-tv-z]{6})/u)[1];
+  const failure = run(project, ["transition", ticketId, "ready"], 1);
+  assert.match(failure, /fill the Rollback section/u);
+});

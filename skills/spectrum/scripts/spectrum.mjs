@@ -30,7 +30,7 @@ const TRANSITIONS = {
   },
 };
 const DEFAULT_CONFIG = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   paths: {
     issues: "spectrum/issues",
     tickets: "spectrum/tickets",
@@ -38,6 +38,24 @@ const DEFAULT_CONFIG = {
     ticketArchive: "spectrum/archives/tickets",
     specs: "docs/specs",
     adrs: "docs/adrs",
+  },
+  contract: {
+    issue: {
+      ready: { sections: ["Problem", "Desired outcome"] },
+      ticketed: { linkedTickets: true },
+    },
+    ticket: {
+      ready: {
+        sections: ["Outcome", "Context", "Validation", "Spec updates", "ADR candidates"],
+        subsections: ["In scope", "Out of scope"],
+        checklists: ["Acceptance criteria", "Implementation plan", "Human QA"],
+      },
+      qa: {
+        checklistsComplete: ["Acceptance criteria", "Implementation plan"],
+        sections: ["Execution log"],
+      },
+      done: { qaApproved: true },
+    },
   },
 };
 
@@ -107,8 +125,11 @@ function loadProject(start) {
 }
 
 function validateConfig(config) {
-  if (config?.schemaVersion !== 1 || !config.paths) {
-    fail("spectrum/config.json must use Spectrum schemaVersion 1.");
+  if (config?.schemaVersion !== 2 || !config.paths) {
+    fail("spectrum/config.json must use Spectrum schemaVersion 2.");
+  }
+  if (typeof config.contract !== "object" || config.contract === null) {
+    fail("spectrum/config.json is missing the contract object.");
   }
   for (const name of Object.keys(DEFAULT_CONFIG.paths)) {
     const configured = config.paths[name];
@@ -359,54 +380,40 @@ function checklist(sectionText) {
   }));
 }
 
-function readinessProblems(artifact, targetStatus, options = {}) {
+function readinessProblems(artifact, targetStatus, contract, options = {}) {
   const problems = [];
-  if (artifact.data.kind === "issue" && targetStatus === "ready") {
-    if (!section(artifact.body, "Problem")) problems.push("fill the Problem section");
-    if (!section(artifact.body, "Desired outcome")) {
-      problems.push("fill the Desired outcome section");
+  const kind = artifact.data.kind;
+  const gate = contract?.[kind]?.[targetStatus] || {};
+
+  for (const heading of gate.sections || []) {
+    if (!section(artifact.body, heading)) problems.push(`fill the ${heading} section`);
+  }
+  for (const heading of gate.subsections || []) {
+    if (!section(artifact.body, heading, 3)) problems.push(`fill the ${heading} subsection`);
+  }
+  for (const heading of gate.checklists || []) {
+    const items = checklist(section(artifact.body, heading));
+    if (items.length === 0 || items.some((item) => /placeholder/iu.test(item.text))) {
+      problems.push(`replace placeholders in ${heading} with concrete checkboxes`);
     }
   }
-  if (artifact.data.kind === "issue" && targetStatus === "ticketed") {
+  for (const heading of gate.checklistsComplete || []) {
+    const items = checklist(section(artifact.body, heading));
+    if (items.length === 0 || items.some((item) => !item.checked)) {
+      problems.push(`complete every checkbox in ${heading}`);
+    }
+  }
+  if (gate.linkedTickets) {
     if (!Array.isArray(artifact.data.tickets) || artifact.data.tickets.length === 0) {
       problems.push("link at least one ticket in frontmatter");
     }
   }
-  if (artifact.data.kind === "ticket" && targetStatus === "ready") {
-    const required = ["Outcome", "Context", "Validation", "Spec updates", "ADR candidates"];
-    for (const heading of required) {
-      if (!section(artifact.body, heading)) problems.push(`fill the ${heading} section`);
-    }
-    for (const heading of ["In scope", "Out of scope"]) {
-      if (!section(artifact.body, heading, 3)) problems.push(`fill the ${heading} subsection`);
-    }
-    for (const heading of ["Acceptance criteria", "Implementation plan", "Human QA"]) {
-      const items = checklist(section(artifact.body, heading));
-      if (items.length === 0 || items.some((item) => /placeholder/iu.test(item.text))) {
-        problems.push(`replace placeholders in ${heading} with concrete checkboxes`);
-      }
-    }
-  }
-  if (artifact.data.kind === "ticket" && targetStatus === "qa") {
-    for (const heading of ["Acceptance criteria", "Implementation plan"]) {
-      const items = checklist(section(artifact.body, heading));
-      if (items.length === 0 || items.some((item) => !item.checked)) {
-        problems.push(`complete every checkbox in ${heading}`);
-      }
-    }
-    if (!section(artifact.body, "Execution log")) {
-      problems.push("record validation and review evidence in Execution log");
-    }
-  }
-  if (artifact.data.kind === "ticket" && targetStatus === "done") {
-    const qa = checklist(section(artifact.body, "Human QA"));
-    if (qa.length === 0 || qa.some((item) => !item.checked)) {
-      problems.push("complete every Human QA checkbox");
-    }
+  if (gate.qaApproved) {
     if (!/\bapproved\b/iu.test(section(artifact.body, "QA notes"))) {
       problems.push('record explicit user approval in QA notes using the word "approved"');
     }
   }
+
   if (
     ["ready", "active", "qa", "done", "ticketed"].includes(targetStatus) &&
     !options.ignoreBlockers &&
@@ -431,7 +438,7 @@ function transition(id, targetStatus) {
       }.`,
     );
   }
-  const problems = readinessProblems(artifact, targetStatus);
+  const problems = readinessProblems(artifact, targetStatus, project.config.contract);
   if (artifact.data.kind === "issue" && targetStatus === "ticketed") {
     const linked = (artifact.data.tickets || []).map((ticketId) =>
       findArtifact(project, ticketId),
@@ -657,7 +664,7 @@ function validateArtifactShape(artifact, project, byId) {
         }[data.status] || [];
   const gateProblems = new Set(
     requiredGates.flatMap((gate) =>
-      readinessProblems(artifact, gate, { ignoreBlockers: true }),
+      readinessProblems(artifact, gate, project.config.contract, { ignoreBlockers: true }),
     ),
   );
   for (const problem of gateProblems) {
