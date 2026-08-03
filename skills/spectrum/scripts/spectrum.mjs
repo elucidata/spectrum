@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const ISSUE_STATES = ["open", "ready", "ticketed"];
@@ -39,6 +40,15 @@ const DEFAULT_CONFIG = {
     adrs: "docs/adrs",
   },
 };
+
+// scripts/ -> skills/spectrum/ ; templates live at skills/spectrum/templates/
+const SKILL_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
+
+function loadTemplate(root, name) {
+  const override = join(root, "spectrum", "templates", `${name}.md`);
+  if (existsSync(override)) return readFileSync(override, "utf8");
+  return readFileSync(join(SKILL_DIR, "templates", `${name}.md`), "utf8");
+}
 
 class CliError extends Error {}
 
@@ -126,24 +136,9 @@ function projectPath(project, name) {
 const AGENTS_START = "<!-- spectrum:start -->";
 const AGENTS_END = "<!-- spectrum:end -->";
 
-function agentsBlock() {
-  return `${AGENTS_START}
-## Spectrum workflow
-
-This project uses **Spectrum** to manage development work as Markdown artifacts.
-Issues and tickets live in \`spectrum/\`; specs in \`docs/specs\`; ADRs in \`docs/adrs\`.
-
-When asked to capture an idea or bug, triage, turn an issue into an
-implementation-ready ticket, implement a ticket, run QA, or validate artifacts,
-follow the Spectrum workflow. If a \`spectrum\` skill is available, use it. Drive
-all mechanics — IDs, transitions, file moves, validation — through the Spectrum
-CLI rather than hand-editing files, and run \`doctor\` before finishing.
-${AGENTS_END}`;
-}
-
 function writeAgentsBootstrap(root) {
   const agentsPath = join(root, "AGENTS.md");
-  const block = agentsBlock();
+  const block = `${AGENTS_START}\n${loadTemplate(root, "agents").trim()}\n${AGENTS_END}`;
   if (!existsSync(agentsPath)) {
     writeFileSync(agentsPath, `${block}\n`);
     console.log("Added Spectrum guidance to AGENTS.md.");
@@ -255,78 +250,6 @@ function parseArtifact(path) {
   return { path, data, body: match[2].trim() };
 }
 
-function issueBody() {
-  return `## Problem
-
-<!-- What is happening, missing, or worth revisiting? -->
-
-## Desired outcome
-
-<!-- What would be observably better? -->
-
-## Notes
-
-## Open questions
-
-## Research and prototypes
-
-## Decisions
-
-## Next session
-
-- [ ] Decide the next exploration step.`;
-}
-
-function ticketBody() {
-  return `## Outcome
-
-<!-- Describe the observable post-change result. -->
-
-## Scope
-
-### In scope
-
-<!-- List included behavior and surfaces. -->
-
-### Out of scope
-
-<!-- List nearby work this ticket does not authorize. -->
-
-## Context
-
-<!-- Include only facts the implementation agent cannot cheaply rediscover. -->
-
-## Acceptance criteria
-
-- [ ] Replace this placeholder with an observable criterion.
-
-## Implementation plan
-
-### Phase 1: Implement
-
-- [ ] Replace this placeholder with a concrete work item.
-
-## Validation
-
-<!-- Name verified project commands and focused checks. -->
-
-## Spec updates
-
-<!-- Name each spec and the complete post-change truth it must contain, or explain why none changes. -->
-
-## ADR candidates
-
-<!-- Record only durable and surprising trade-offs, or state that none are expected. -->
-
-## Execution log
-
-## Human QA
-
-- [ ] Replace this placeholder with a human-observable scenario.
-
-## QA notes`;
-}
-
 function createArtifact(kind, title, sourceIssue) {
   if (!title?.trim()) fail("A non-empty --title is required.");
   const project = loadProject();
@@ -364,7 +287,7 @@ function createArtifact(kind, title, sourceIssue) {
           specs: [],
           adrs: [],
         };
-  const artifact = { data, body: kind === "issue" ? issueBody() : ticketBody() };
+  const artifact = { data, body: loadTemplate(project.root, kind) };
   const directory = projectPath(project, kind === "issue" ? "issues" : "tickets");
   const path = join(directory, `${id}-${slugify(title)}.${kind}.md`);
   writeFileSync(path, serializeArtifact(artifact));

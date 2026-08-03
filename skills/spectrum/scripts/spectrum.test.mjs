@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -223,4 +223,43 @@ test("init --no-agents does not create AGENTS.md", () => {
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init", "--no-agents"]);
   assert.ok(!existsSync(join(project, "AGENTS.md")), "AGENTS.md should not be created");
+});
+
+test("new artifacts use the shipped default templates", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  run(project, ["new", "ticket", "--title", "Default template ticket"]);
+  const body = readFileSync(onlyMarkdown(join(project, "spectrum", "tickets")), "utf8");
+  assert.match(body, /## Outcome/u);
+  assert.match(body, /## Human QA/u);
+});
+
+test("a project template override replaces the default body per kind", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const templates = join(project, "spectrum", "templates");
+  mkdirSync(templates, { recursive: true });
+  writeFileSync(join(templates, "ticket.md"), "## House outcome\n\n<!-- ours -->\n");
+
+  run(project, ["new", "ticket", "--title", "Overridden ticket"]);
+  const ticketBody = readFileSync(onlyMarkdown(join(project, "spectrum", "tickets")), "utf8");
+  assert.match(ticketBody, /## House outcome/u);
+  assert.doesNotMatch(ticketBody, /## Outcome\b/u);
+
+  // Issues are untouched — override is per file.
+  run(project, ["new", "issue", "--title", "Still default issue"]);
+  const issueBody = readFileSync(onlyMarkdown(join(project, "spectrum", "issues")), "utf8");
+  assert.match(issueBody, /## Problem/u);
+});
+
+test("an agents template override changes the AGENTS.md block body", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  const templates = join(project, "spectrum", "templates");
+  mkdirSync(templates, { recursive: true });
+  writeFileSync(join(templates, "agents.md"), "## Spectrum here\n\nCustom guidance.\n");
+  run(project, ["init"]);
+  const contents = readFileSync(join(project, "AGENTS.md"), "utf8");
+  assert.match(contents, /## Spectrum here/u);
+  assert.match(contents, /Custom guidance\./u);
+  assert.equal(countOccurrences(contents, AGENTS_START), 1);
 });
