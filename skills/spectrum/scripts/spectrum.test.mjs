@@ -490,6 +490,35 @@ test("doctor warns (does not error) on a qa-status ticket missing a required sec
   assert.match(doctor, /warning\(s\)/u);
 });
 
+test("doctor warns (does not error) when a contract gate enforces nothing", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const configPath = join(project, "spectrum", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.contract.ticket.ready = {}; // deliberately gut one gate
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const doctor = run(project, ["doctor"]); // visibility, not a block — exit 0
+  assert.match(doctor, /Spectrum is healthy/u);
+  assert.match(doctor, /ticket\.ready/u);
+  assert.match(doctor, /unenforced/u);
+  assert.match(doctor, /warning\(s\)/u);
+});
+
+test("doctor warns when a whole kind declares no readiness gates", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const configPath = join(project, "spectrum", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.contract.ticket = {}; // no gates at all
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const doctor = run(project, ["doctor"]); // still exit 0
+  assert.match(doctor, /Spectrum is healthy/u);
+  assert.match(doctor, /no readiness gates for ticket/u);
+  assert.match(doctor, /warning\(s\)/u);
+});
+
 test("doctor errors when a template override omits a contract-required heading", () => {
   const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
   run(project, ["init"]);

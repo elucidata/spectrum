@@ -713,6 +713,43 @@ function templateContractProblems(project) {
   return problems;
 }
 
+function gateEnforcesSomething(gate) {
+  if (!gate || typeof gate !== "object") return false;
+  return (
+    (gate.sections?.length || 0) > 0 ||
+    (gate.subsections?.length || 0) > 0 ||
+    (gate.checklists?.length || 0) > 0 ||
+    (gate.checklistsComplete?.length || 0) > 0 ||
+    Boolean(gate.linkedTickets) ||
+    Boolean(gate.qaApproved)
+  );
+}
+
+// Surface (never block) a contract that enforces nothing — an emptied gate or
+// kind is a legitimate loose-mode choice, but silently unenforced gates are how
+// a truncated or mis-merged config slips through unnoticed.
+function contractCoverageWarnings(project) {
+  const warnings = [];
+  for (const kind of Object.keys(DEFAULT_CONFIG.contract)) {
+    const gates = project.config.contract?.[kind];
+    const names = gates && typeof gates === "object" ? Object.keys(gates) : [];
+    if (!names.some((name) => gateEnforcesSomething(gates[name]))) {
+      warnings.push(
+        `contract defines no readiness gates for ${kind}; ${kind} transitions are unenforced.`,
+      );
+      continue;
+    }
+    for (const gateName of Object.keys(DEFAULT_CONFIG.contract[kind])) {
+      if (!gateEnforcesSomething(gates[gateName])) {
+        warnings.push(
+          `contract gate ${kind}.${gateName} enforces nothing; that transition is unenforced.`,
+        );
+      }
+    }
+  }
+  return warnings;
+}
+
 function upgradeConfig(pathArg) {
   const root = findProjectRoot(resolve(pathArg || process.cwd()));
   const configPath = join(root, "spectrum", "config.json");
@@ -739,6 +776,7 @@ function doctor() {
   if (project.legacyConfig) {
     warnings.push("config is schemaVersion 1; run `spectrum upgrade` to persist the contract.");
   }
+  warnings.push(...contractCoverageWarnings(project));
   for (const name of Object.keys(DEFAULT_CONFIG.paths)) {
     const path = projectPath(project, name);
     if (!existsSync(path)) errors.push(`${project.config.paths[name]} is missing.`);
