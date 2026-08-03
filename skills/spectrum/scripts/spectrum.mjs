@@ -124,14 +124,21 @@ function loadProject(start) {
     fail(`Could not read ${relative(root, configPath)}: ${error.message}`);
   }
   validateConfig(config);
-  return { root, config };
+  const legacyConfig = config.schemaVersion === 1 || !config.contract;
+  if (legacyConfig) {
+    config.contract = DEFAULT_CONFIG.contract;
+  }
+  return { root, config, legacyConfig };
 }
 
 function validateConfig(config) {
-  if (config?.schemaVersion !== 2 || !config.paths) {
-    fail("spectrum/config.json must use Spectrum schemaVersion 2.");
+  if (config?.schemaVersion !== 1 && config?.schemaVersion !== 2) {
+    fail("spectrum/config.json must use Spectrum schemaVersion 1 or 2.");
   }
-  if (typeof config.contract !== "object" || config.contract === null) {
+  if (!config.paths) {
+    fail("spectrum/config.json is missing the paths object.");
+  }
+  if (config.schemaVersion === 2 && (typeof config.contract !== "object" || config.contract === null)) {
     fail("spectrum/config.json is missing the contract object.");
   }
   for (const name of Object.keys(DEFAULT_CONFIG.paths)) {
@@ -189,7 +196,7 @@ function initialize(pathArg, flags = {}) {
   const root = resolve(pathArg || process.cwd());
   const configPath = join(root, "spectrum", "config.json");
   if (existsSync(configPath)) {
-    fail(`Spectrum is already initialized at ${root}.`);
+    fail(`Spectrum is already initialized at ${root}. Run \`spectrum upgrade\` to update an existing project.`);
   }
   for (const path of Object.values(DEFAULT_CONFIG.paths)) {
     mkdirSync(join(root, path), { recursive: true });
@@ -703,10 +710,27 @@ function templateContractProblems(project) {
   return problems;
 }
 
+function upgradeConfig(pathArg) {
+  const root = findProjectRoot(resolve(pathArg || process.cwd()));
+  const configPath = join(root, "spectrum", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  if (config.schemaVersion === 2 && config.contract) {
+    console.log("Spectrum config is already current (schemaVersion 2).");
+    return;
+  }
+  config.schemaVersion = 2;
+  if (!config.contract) config.contract = DEFAULT_CONFIG.contract;
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  console.log(`Upgraded ${relative(root, configPath)} to schemaVersion 2.`);
+}
+
 function doctor() {
   const project = loadProject();
   const errors = [];
   const warnings = [];
+  if (project.legacyConfig) {
+    warnings.push("config is schemaVersion 1; run `spectrum upgrade` to persist the contract.");
+  }
   for (const name of Object.keys(DEFAULT_CONFIG.paths)) {
     const path = projectPath(project, name);
     if (!existsSync(path)) errors.push(`${project.config.paths[name]} is missing.`);
@@ -750,6 +774,7 @@ function help() {
 
 Usage:
   spectrum init [path] [--no-agents]
+  spectrum upgrade [path]
   spectrum new issue --title <title>
   spectrum new ticket --title <title> [--issue <issue-id>]
   spectrum list [issues|tickets|all] [--status <status>] [--archived]
@@ -768,6 +793,9 @@ function main() {
   switch (command) {
     case "init":
       initialize(noun, flags);
+      break;
+    case "upgrade":
+      upgradeConfig(noun);
       break;
     case "new":
       if (!["issue", "ticket"].includes(noun)) fail("New accepts issue or ticket.");

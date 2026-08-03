@@ -455,3 +455,55 @@ test("doctor errors when a template override omits a contract-required heading",
   assert.match(failure, /Outcome/u);
   assert.match(failure, /required by the contract/u);
 });
+
+function writeV1Config(project, overrides = {}) {
+  const config = {
+    schemaVersion: 1,
+    paths: {
+      issues: "spectrum/issues",
+      tickets: "spectrum/tickets",
+      issueArchive: "spectrum/archives/issues",
+      ticketArchive: "spectrum/archives/tickets",
+      specs: "docs/specs",
+      adrs: "docs/adrs",
+      ...overrides,
+    },
+  };
+  writeFileSync(join(project, "spectrum", "config.json"), `${JSON.stringify(config, null, 2)}\n`);
+}
+
+test("a v1 config still works and doctor advises upgrading", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init", "--no-agents"]);
+  writeV1Config(project); // downgrade the freshly written config to v1
+
+  // The tool keeps working (contract merged in memory).
+  run(project, ["new", "ticket", "--title", "Works on v1"]);
+  const doctor = run(project, ["doctor"]);
+  assert.match(doctor, /schemaVersion 1/u);
+  assert.match(doctor, /spectrum upgrade/u);
+});
+
+test("upgrade rewrites v1 to v2, is idempotent, and preserves customizations", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init", "--no-agents"]);
+  writeV1Config(project, { specs: "documentation/specs" }); // a customized path
+
+  run(project, ["upgrade"]);
+  const upgraded = JSON.parse(readFileSync(join(project, "spectrum", "config.json"), "utf8"));
+  assert.equal(upgraded.schemaVersion, 2);
+  assert.ok(upgraded.contract.ticket.ready.sections.includes("Outcome"));
+  assert.equal(upgraded.paths.specs, "documentation/specs"); // customization survived
+
+  const second = run(project, ["upgrade"]); // idempotent no-op
+  assert.match(second, /already current/u);
+  const again = JSON.parse(readFileSync(join(project, "spectrum", "config.json"), "utf8"));
+  assert.deepEqual(again, upgraded);
+});
+
+test("init on an existing project points at upgrade", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init", "--no-agents"]);
+  const failure = run(project, ["init"], 1);
+  assert.match(failure, /spectrum upgrade/u);
+});
