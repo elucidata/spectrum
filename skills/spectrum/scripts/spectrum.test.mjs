@@ -437,3 +437,17 @@ test("doctor warns (does not error) on in-flight artifacts missing a required se
   assert.match(doctor, /fill the Risk section/u);
   assert.match(doctor, /warning\(s\)/u);
 });
+
+test("doctor errors when a template override omits a contract-required heading", () => {
+  const project = mkdtempSync(join(tmpdir(), "spectrum-test-"));
+  run(project, ["init"]);
+  const templates = join(project, "spectrum", "templates");
+  mkdirSync(templates, { recursive: true });
+  // Override the ticket template but drop the required "## Outcome" heading.
+  writeFileSync(join(templates, "ticket.md"), "## Context\n\n<!-- only context -->\n");
+
+  const failure = run(project, ["doctor"], 1);
+  assert.match(failure, /ticket\.md/u);
+  assert.match(failure, /Outcome/u);
+  assert.match(failure, /required by the contract/u);
+});

@@ -673,6 +673,40 @@ function validateArtifactShape(artifact, project, byId) {
   return { errors, warnings };
 }
 
+function hasHeading(templateText, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`^#{1,6} ${escaped}[\\t ]*$`, "imu").test(templateText);
+}
+
+function templateContractProblems(project) {
+  const problems = [];
+  for (const kind of ["issue", "ticket"]) {
+    // Only check templates that have been overridden in the project.
+    const override = join(project.root, "spectrum", "templates", `${kind}.md`);
+    if (!existsSync(override)) continue;
+
+    const gates = project.config.contract?.[kind] || {};
+    const required = new Set();
+    for (const gate of Object.values(gates)) {
+      for (const heading of gate.sections || []) required.add(heading);
+      for (const heading of gate.subsections || []) required.add(heading);
+    }
+    let template;
+    try {
+      template = loadTemplate(project.root, kind);
+    } catch {
+      problems.push(`${kind} template could not be read.`);
+      continue;
+    }
+    for (const heading of required) {
+      if (!hasHeading(template, heading)) {
+        problems.push(`${kind}.md is missing the "## ${heading}" heading required by the contract.`);
+      }
+    }
+  }
+  return problems;
+}
+
 function doctor() {
   const project = loadProject();
   const errors = [];
@@ -681,6 +715,7 @@ function doctor() {
     const path = projectPath(project, name);
     if (!existsSync(path)) errors.push(`${project.config.paths[name]} is missing.`);
   }
+  errors.push(...templateContractProblems(project));
   let artifacts = [];
   try {
     artifacts = scanArtifacts(project);
